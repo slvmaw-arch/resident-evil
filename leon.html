@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mission Terminal</title>
+
+<style>
+/* ===== COLORS ===== */
+:root{
+  --bg:#050807;
+  --panel:#0b1310;
+  --card:#0e1a15;
+  --text:#c7e6d8;
+  --muted:#6b9a89;
+  --accent:#3cffb3;
+  --alert:#ff3c3c;
+  --line:#1f3f33;
+}
+
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  background:var(--bg);
+  font-family:"Courier New",monospace;
+  color:var(--text);
+  overflow:hidden;
+}
+
+/* ===== CRT SCANLINES ===== */
+body::after{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  background:repeating-linear-gradient(
+    0deg,
+    rgba(255,255,255,.03),
+    rgba(255,255,255,.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+/* ===== BOOT SCREEN ===== */
+#boot{
+  position:fixed;
+  inset:0;
+  background:#000;
+  color:var(--accent);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  font-size:22px;
+  letter-spacing:3px;
+  animation:fadeOut 3s forwards;
+}
+@keyframes fadeOut{
+  0%,70%{opacity:1}
+  100%{opacity:0;pointer-events:none}
+}
+
+/* ===== LAYOUT ===== */
+.wrapper{
+  width:100%;
+  height:100%;
+  display:grid;
+  grid-template-columns:3fr 1.3fr;
+  padding:40px;
+  gap:30px;
+}
+
+/* ===== LEFT PANEL ===== */
+.todo{
+  background:var(--card);
+  border:2px solid var(--line);
+  padding:40px;
+  display:flex;
+  flex-direction:column;
+  box-shadow:inset 0 0 50px rgba(60,255,179,.12);
+}
+
+h1{
+  margin:0;
+  font-size:38px;
+  letter-spacing:4px;
+  color:var(--accent);
+}
+
+.sub{
+  font-size:14px;
+  color:var(--muted);
+  margin:10px 0 18px;
+}
+
+/* STATUS BAR */
+.bar{
+  height:6px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  animation:sweep 2s linear infinite;
+  margin-bottom:25px;
+}
+@keyframes sweep{
+  from{background-position:0}
+  to{background-position:400px}
+}
+
+/* ALERT MODE */
+.alertMode h1{color:var(--alert)}
+.alertMode .bar{
+  background:linear-gradient(90deg,transparent,var(--alert),transparent);
+}
+
+/* ===== TASK LIST ===== */
+ul{
+  list-style:none;
+  padding:0;
+  margin:0;
+  overflow-y:auto;
+}
+
+li{
+  background:var(--panel);
+  border:1px solid var(--line);
+  padding:18px;
+  margin-bottom:16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.left{
+  display:flex;
+  gap:16px;
+  align-items:flex-start;
+}
+
+.icon{
+  width:22px;
+  height:22px;
+  border:2px solid var(--accent);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+}
+
+input[type="checkbox"]{
+  display:none;
+}
+
+input[type="checkbox"]:checked + .icon{
+  background:var(--accent);
+  color:#002015;
+}
+
+.task{
+  font-size:18px;
+}
+
+.meta{
+  font-size:13px;
+  color:var(--muted);
+}
+
+.done .task{
+  text-decoration:line-through;
+  color:#4d6f62;
+}
+
+.delete{
+  background:none;
+  border:none;
+  color:var(--muted);
+  font-size:18px;
+  cursor:pointer;
+}
+
+/* ===== RIGHT PANEL ===== */
+.panel{
+  background:var(--panel);
+  border:2px solid var(--line);
+  padding:32px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+
+.panel h2{
+  font-size:18px;
+  letter-spacing:3px;
+  color:var(--accent);
+  margin-bottom:20px;
+}
+
+.panel input{
+  background:#020504;
+  border:1px solid var(--line);
+  color:var(--text);
+  padding:14px;
+  margin-bottom:14px;
+  font-family:inherit;
+}
+
+.panel button{
+  background:var(--accent);
+  border:none;
+  padding:14px;
+  font-weight:bold;
+  font-size:16px;
+  cursor:pointer;
+}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:900px){
+  .wrapper{grid-template-columns:1fr}
+}
+</style>
+</head>
+
+<body>
+
+<div id="boot">INITIALIZING SYSTEM…</div>
+
+<div class="wrapper">
+
+  <div class="todo" id="terminal">
+    <h1>MISSION LOG</h1>
+    <div class="sub">OPERATOR: LEON S. KENNEDY</div>
+    <div class="bar"></div>
+    <ul id="list"></ul>
+  </div>
+
+  <div class="panel">
+    <h2>INPUT CONSOLE</h2>
+    <input id="task" placeholder="New objective..." />
+    <input id="date" type="date" />
+    <input id="time" type="time" />
+    <button onclick="addTask()">CONFIRM</button>
+  </div>
+
+</div>
+
+<!-- PS2 MENU BLIP -->
+<audio id="beep" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA="></audio>
+
+<script>
+let tasks=JSON.parse(localStorage.getItem("tasks"))||[];
+const list=document.getElementById("list");
+const term=document.getElementById("terminal");
+const beep=document.getElementById("beep");
+
+function save(){localStorage.setItem("tasks",JSON.stringify(tasks));}
+
+function formatTime(t){
+  if(!t)return"";
+  const[h,m]=t.split(":");
+  return`${(h%12)||12}:${m} ${h>=12?"PM":"AM"}`;
+}
+
+function render(){
+  list.innerHTML="";
+  tasks.forEach((t,i)=>{
+    const li=document.createElement("li");
+    if(t.done)li.classList.add("done");
+    li.innerHTML=`
+      <div class="left">
+        <label>
+          <input type="checkbox" ${t.done?"checked":""} onchange="toggle(${i})">
+          <div class="icon">■</div>
+        </label>
+        <div>
+          <div class="task">${t.text}</div>
+          <div class="meta">
+            ${t.date?`DATE ${t.date}`:""}
+            ${t.time?` | TIME ${formatTime(t.time)}`:""}
+          </div>
+        </div>
+      </div>
+      <button class="delete" onclick="del(${i})">X</button>
+    `;
+    list.appendChild(li);
+  });
+
+  term.classList.toggle("alertMode",tasks.length>=5);
+  save();
+}
+
+function addTask(){
+  if(!task.value.trim())return;
+  beep.play();
+  tasks.push({
+    text:task.value,
+    date:date.value||null,
+    time:time.value||null,
+    done:false
+  });
+  task.value=date.value=time.value="";
+  render();
+}
+
+function toggle(i){beep.play();tasks[i].done=!tasks[i].done;render();}
+function del(i){tasks.splice(i,1);render();}
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="Enter")addTask();
+});
+
+render();
+</script>
+
+</body>
+</html>
